@@ -1,18 +1,3 @@
-/*
- * Copyright 2020 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package com.google.ar.core.examples.kotlin.augmentedfaces
 
 import android.opengl.GLES20
@@ -52,60 +37,54 @@ import java.util.EnumSet
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 
-/**
- * This is a simple example that shows how to create an augmented reality (AR) application using the
- * ARCore API. The application will display any detected planes and will allow the user to tap on a
- * plane to place a 3d model of the Android robot.
- */
-class AugmentedFacesActivity : AppCompatActivity(), GLSurfaceView.Renderer {
-    // Rendering. The Renderers are created here, and initialized when the GL surface is created.
-    private var surfaceView: GLSurfaceView? = null
 
-    private var installRequested = false
+class AugmentedFacesActivity : AppCompatActivity(), GLSurfaceView.Renderer { //implements GLSurfaceView.Renderer for rendering OpenGL graphics.
 
-    private var session: Session? = null
-    private val messageSnackbarHelper = SnackbarHelper()
-    private var displayRotationHelper: DisplayRotationHelper? = null
-    private val trackingStateHelper = TrackingStateHelper(this)
+    private var surfaceView: GLSurfaceView? = null //Displays AR graphics.
 
-    private val backgroundRenderer = BackgroundRenderer()
-    private val augmentedFaceRenderer = AugmentedFaceRenderer()
-    private val noseObject = ObjectRenderer()
-    private val rightEarObject = ObjectRenderer()
-    private val leftEarObject = ObjectRenderer()
+    private var installRequested = false //Tracks if ARCore installation was requested.
+
+    private var session: Session? = null //Manages ARCore session.
+    private val messageSnackbarHelper = SnackbarHelper() //Shows a snackbar message.
+    private var displayRotationHelper: DisplayRotationHelper? = null //Handles display rotations.
+    private val trackingStateHelper = TrackingStateHelper(this) //Manages the display of the AR tracking state.
+
+    private val backgroundRenderer = BackgroundRenderer() //Renders the camera feed.
+    private val augmentedFaceRenderer = AugmentedFaceRenderer() //Renders augmented faces.
+    private val noseObject = ObjectRenderer() //Renders the nose.
+    private val rightEarObject = ObjectRenderer() //Renders the right ear.
+    private val leftEarObject = ObjectRenderer() //Renders the left ear.
 
     // Temporary matrix allocated here to reduce number of allocations for each frame.
-    private val noseMatrix = FloatArray(16)
-    private val rightEarMatrix = FloatArray(16)
-    private val leftEarMatrix = FloatArray(16)
+    private val noseMatrix = FloatArray(16) //Matrix for the nose.
+    private val rightEarMatrix = FloatArray(16) //Matrix for the right ear.
+    private val leftEarMatrix = FloatArray(16)//Matrix for the left ear.
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
-        surfaceView = findViewById(R.id.surfaceview)
-        displayRotationHelper = DisplayRotationHelper( /*context=*/this)
+        setContentView(R.layout.activity_main) //Sets the content view to the layout.
+        surfaceView = findViewById(R.id.surfaceview) //Retrieves the GLSurfaceView from the layout.
+        displayRotationHelper = DisplayRotationHelper(this) //Handles display rotations.
 
         // Set up renderer.
         surfaceView?.let {
-            it.setPreserveEGLContextOnPause(true)
-            it.setEGLContextClientVersion(2)
+            it.preserveEGLContextOnPause = true //Preserves the EGL context when the activity is paused.
+            it.setEGLContextClientVersion(2) //Sets the OpenGL ES version to 2.
             it.setEGLConfigChooser(8, 8, 8, 8, 16, 0) // Alpha used for plane blending.
-            it.setRenderer(this)
-            it.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY)
-            it.setWillNotDraw(false)
+            it.setRenderer(this) //Sets the renderer.
+            it.renderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY //Renders continuously.
+            it.setWillNotDraw(false) //Allows the GLSurfaceView to call onDrawFrame().
         }
 
 
 
 
-        installRequested = false
+        installRequested = false //Sets installRequested to false.
     }
 
     override fun onDestroy() {
         if (session != null) {
             // Explicitly close ARCore Session to release native resources.
-            // Review the API reference for important considerations before calling close() in apps with
-            // more complicated lifecycle requirements:
-            // https://developers.google.com/ar/reference/java/arcore/reference/com/google/ar/core/Session#close()
             session!!.close()
             session = null
         }
@@ -120,13 +99,15 @@ class AugmentedFacesActivity : AppCompatActivity(), GLSurfaceView.Renderer {
             var exception: Exception? = null
             var message: String? = null
             try {
-                when (ArCoreApk.getInstance().requestInstall(this, !installRequested)) {
-                    InstallStatus.INSTALL_REQUESTED -> {
-                        installRequested = true
+                when (ArCoreApk.getInstance().requestInstall(this, !installRequested)) { //Requests ARCore installation.
+                    InstallStatus.INSTALL_REQUESTED -> { //If installation is requested.
+                        installRequested = true //Sets installRequested to true.
                         return
                     }
 
-                    InstallStatus.INSTALLED -> {}
+                    InstallStatus.INSTALLED -> {} //If ARCore is installed, do nothing.
+
+                    else -> {}
                 }
 
                 // ARCore requires camera permissions to operate. If we did not yet obtain runtime
@@ -137,17 +118,17 @@ class AugmentedFacesActivity : AppCompatActivity(), GLSurfaceView.Renderer {
                 }
 
                 // Create the session and configure it to use a front-facing (selfie) camera.
-                session = Session( /* context= */this, EnumSet.noneOf(
-                    Session.Feature::class.java
+                session = Session(this, EnumSet.noneOf( //Creates a new ARCore session.
+                    Session.Feature::class.java //Specifies the features to enable.
                 )
                 )
-                val cameraConfigFilter = CameraConfigFilter(session)
-                cameraConfigFilter.setFacingDirection(CameraConfig.FacingDirection.FRONT)
-                val cameraConfigs = session!!.getSupportedCameraConfigs(cameraConfigFilter)
-                if (!cameraConfigs.isEmpty()) {
+                val cameraConfigFilter = CameraConfigFilter(session) //Creates a new camera config filter.
+                cameraConfigFilter.setFacingDirection(CameraConfig.FacingDirection.FRONT) //Sets the camera facing direction to front.
+                val cameraConfigs = session!!.getSupportedCameraConfigs(cameraConfigFilter) //Retrieves the supported camera configs.
+                if (cameraConfigs.isNotEmpty()) { //If there are supported camera configs.
                     // Element 0 contains the camera config that best matches the session feature
                     // and filter settings.
-                    session!!.cameraConfig = cameraConfigs[0]
+                    session!!.cameraConfig = cameraConfigs[0] //Sets the camera config to the first supported camera config.
                 } else {
                     message = "This device does not have a front-facing (selfie) camera"
                     exception = UnavailableDeviceNotCompatibleException(message)
